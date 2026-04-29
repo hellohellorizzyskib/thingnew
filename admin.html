@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel</title>
+    <style>
+        :root {
+            --bg-light: white;
+            --text-light: #333;
+            --bg-dark: #333;
+            --text-dark: #ccc;
+            --border-light: #ddd;
+            --border-dark: #555;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            background: var(--bg-light);
+            color: var(--text-light);
+        }
+        .page {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 32px;
+        }
+        .title {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        .back-btn {
+            padding: 10px 16px;
+            background: rgba(0,0,0,0.05);
+            border: 1px solid var(--border-light);
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+        .section {
+            margin-bottom: 40px;
+        }
+        .section-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1px solid var(--border-light);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        th {
+            background: rgba(0,0,0,0.05);
+            padding: 12px;
+            text-align: left;
+            font-weight: 700;
+            border-bottom: 1px solid var(--border-light);
+        }
+        td {
+            padding: 12px;
+            border-bottom: 1px solid var(--border-light);
+        }
+        tr:last-child td {
+            border-bottom: none;
+        }
+        .action-btn {
+            padding: 6px 12px;
+            background: #ff4444;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .action-btn:hover {
+            background: #cc0000;
+        }
+        .action-btn.unban {
+            background: #44aa44;
+        }
+        .action-btn.unban:hover {
+            background: #229922;
+        }
+        .ban-form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .ban-form input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid var(--border-light);
+            border-radius: 12px;
+            font-size: 1rem;
+        }
+        .ban-form button {
+            padding: 10px 20px;
+            background: #ff4444;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+        .ban-form button:hover {
+            background: #cc0000;
+        }
+        .empty-message {
+            padding: 20px;
+            background: rgba(0,0,0,0.05);
+            border-radius: 12px;
+            text-align: center;
+            color: rgba(0,0,0,0.6);
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div class="header">
+            <div class="title">Admin Panel</div>
+            <button class="back-btn" onclick="window.location.href='/dashboard'">Back to Dashboard</button>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Currently Logged In Users</div>
+            <table id="sessionsTable">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>IP Address</th>
+                        <th>Login Time</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="sessionsBody">
+                    <tr><td colspan="4" class="empty-message">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Login History</div>
+            <table id="loginsTable">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>IP Address</th>
+                        <th>Timestamp</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="loginsBody">
+                    <tr><td colspan="4" class="empty-message">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Manage Bans</div>
+            <div class="ban-form">
+                <input type="text" id="ipToBan" placeholder="Enter IP address to ban" />
+                <button onclick="banIp()">Ban IP</button>
+            </div>
+            <table id="bansTable">
+                <thead>
+                    <tr>
+                        <th>IP Address</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="bansBody">
+                    <tr><td colspan="2" class="empty-message">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        function loadSessions() {
+            fetch('/admin/sessions')
+                .then(response => response.json())
+                .then(sessions => {
+                    const tbody = document.getElementById('sessionsBody');
+                    tbody.innerHTML = '';
+                    if (!Array.isArray(sessions) || sessions.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="4" class="empty-message">No active sessions</td></tr>';
+                        return;
+                    }
+                    sessions.forEach(session => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${session.username}</td>
+                            <td>${session.ip}</td>
+                            <td>${new Date(session.loginTime).toLocaleString()}</td>
+                            <td><button class="action-btn" onclick="kickUser('${session.username}')">Kick</button></td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                })
+                .catch(() => {
+                    document.getElementById('sessionsBody').innerHTML = '<tr><td colspan="4" class="empty-message">Error loading sessions</td></tr>';
+                });
+        }
+
+        function loadLogins() {
+            fetch('/admin/logins')
+                .then(response => response.json())
+                .then(logins => {
+                    const tbody = document.getElementById('loginsBody');
+                    tbody.innerHTML = '';
+                    if (!Array.isArray(logins) || logins.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="4" class="empty-message">No login history</td></tr>';
+                        return;
+                    }
+                    logins.reverse().forEach(login => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${login.username}</td>
+                            <td>${login.ip}</td>
+                            <td>${new Date(login.timestamp).toLocaleString()}</td>
+                            <td><button class="action-btn" onclick="banIpFromTable('${login.ip}')">Ban</button></td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                })
+                .catch(() => {
+                    document.getElementById('loginsBody').innerHTML = '<tr><td colspan="4" class="empty-message">Error loading logins</td></tr>';
+                });
+        }
+
+        function loadBans() {
+            fetch('/admin/bans')
+                .then(response => response.json())
+                .then(bannedIps => {
+                    const tbody = document.getElementById('bansBody');
+                    tbody.innerHTML = '';
+                    if (!Array.isArray(bannedIps) || bannedIps.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="2" class="empty-message">No banned IPs</td></tr>';
+                        return;
+                    }
+                    bannedIps.forEach(ip => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${ip}</td>
+                            <td><button class="action-btn unban" onclick="unbanIp('${ip}')">Unban</button></td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                })
+                .catch(() => {
+                    document.getElementById('bansBody').innerHTML = '<tr><td colspan="2" class="empty-message">Error loading bans</td></tr>';
+                });
+        }
+
+        function banIp() {
+            const ip = document.getElementById('ipToBan').value.trim();
+            if (!ip) {
+                alert('Please enter an IP address');
+                return;
+            }
+
+            fetch('/admin/ban', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ip })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        alert(data.error);
+                    } else {
+                        alert(data.message);
+                        document.getElementById('ipToBan').value = '';
+                        loadBans();
+                    }
+                })
+                .catch(err => alert('Error: ' + err.message));
+        }
+
+        function banIpFromTable(ip) {
+            if (confirm(`Ban IP ${ip}?`)) {
+                fetch('/admin/ban', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ip })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        alert(data.message || data.error);
+                        loadBans();
+                    })
+                    .catch(err => alert('Error: ' + err.message));
+            }
+        }
+
+        function unbanIp(ip) {
+            if (confirm(`Unban IP ${ip}?`)) {
+                fetch('/admin/unban', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ip })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        alert(data.message || data.error);
+                        loadBans();
+                    })
+                    .catch(err => alert('Error: ' + err.message));
+            }
+        }
+
+        function kickUser(username) {
+            if (confirm(`Kick user ${username}?`)) {
+                fetch('/logout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        alert(data.message || data.error);
+                        loadSessions();
+                    })
+                    .catch(err => alert('Error: ' + err.message));
+            }
+        }
+
+        loadLogins();
+        loadBans();
+        loadSessions();
+        setInterval(loadLogins, 5000);
+        setInterval(loadBans, 5000);
+        setInterval(loadSessions, 5000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Post - Williamedia</title>
+    <style>
+        :root {
+            --bg-light: white;
+            --text-light: #333;
+            --bg-dark: #333;
+            --text-dark: #ccc;
+            --border-light: #ddd;
+            --border-dark: #555;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            background: var(--bg-light);
+            color: var(--text-light);
+        }
+        .page {
+            max-width: 860px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .title {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        .secondary {
+            font-size: 0.95rem;
+            opacity: 0.75;
+        }
+        .button {
+            border: 1px solid var(--border-light);
+            background: rgba(0,0,0,0.05);
+            color: inherit;
+            padding: 10px 16px;
+            border-radius: 12px;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+        .button.primary {
+            background: #4455ff;
+            color: white;
+            border-color: #4455ff;
+        }
+        .form-card {
+            margin-top: 24px;
+            border: 1px solid var(--border-light);
+            border-radius: 20px;
+            padding: 22px;
+            background: rgba(255,255,255,0.92);
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+        textarea,
+        input[type="file"] {
+            width: 100%;
+            border: 1px solid var(--border-light);
+            border-radius: 12px;
+            padding: 14px;
+            font-size: 1rem;
+            font-family: inherit;
+        }
+        textarea {
+            min-height: 200px;
+            resize: vertical;
+        }
+        .hint {
+            font-size: 0.92rem;
+            color: #555;
+        }
+        .preview {
+            background: rgba(0, 0, 0, 0.03);
+            border: 1px solid var(--border-light);
+            border-radius: 12px;
+            padding: 14px;
+            font-size: 0.95rem;
+            color: #444;
+        }
+        .error {
+            color: #b00;
+            font-size: 0.95rem;
+        }
+        .status {
+            margin-top: 10px;
+            font-size: 0.95rem;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div class="header">
+            <div>
+                <div class="title">Create a Post</div>
+                <div class="secondary" id="subTitle">Share a text update, image, or short clip.</div>
+            </div>
+            <button class="button" onclick="window.location.href='/dashboard'">Back</button>
+        </div>
+        <div class="form-card">
+            <div class="form-group">
+                <label for="postContent">Post text</label>
+                <textarea id="postContent" placeholder="Write something..." maxlength="1000"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="mediaInput">Upload image or short clip</label>
+                <input id="mediaInput" type="file" accept="image/*,video/*">
+                <div class="hint">You can upload an image or a video clip. Videos must be 45 seconds or shorter.</div>
+                <div class="preview" id="mediaPreview" style="display:none"></div>
+                <div class="error" id="mediaError"></div>
+            </div>
+            <button class="button primary" onclick="submitPost()">Post</button>
+            <div class="status" id="submitStatus"></div>
+        </div>
+    </div>
+    <script>
+        const currentUser = localStorage.getItem('currentUser');
+        if (!currentUser) {
+            window.location.href = '/login';
+        }
+
+        const mediaInput = document.getElementById('mediaInput');
+        const mediaPreview = document.getElementById('mediaPreview');
+        const mediaError = document.getElementById('mediaError');
+        let selectedFile = null;
+        let selectedMediaType = null;
+        let selectedDataUrl = null;
+
+        mediaInput.addEventListener('change', async () => {
+            mediaError.textContent = '';
+            mediaPreview.style.display = 'none';
+            selectedFile = mediaInput.files[0];
+            selectedDataUrl = null;
+            selectedMediaType = null;
+
+            if (!selectedFile) {
+                return;
+            }
+
+            if (selectedFile.type.startsWith('video/')) {
+                const url = URL.createObjectURL(selectedFile);
+                const video = document.createElement('video');
+                video.preload = 'metadata';
+                video.src = url;
+                video.onloadedmetadata = () => {
+                    URL.revokeObjectURL(url);
+                    if (video.duration > 45) {
+                        mediaError.textContent = 'Video is too long. Please select a clip under 45 seconds.';
+                        mediaInput.value = '';
+                        selectedFile = null;
+                        return;
+                    }
+                    selectedMediaType = selectedFile.type;
+                    mediaPreview.style.display = 'block';
+                    mediaPreview.textContent = `Selected video: ${selectedFile.name} (${Math.round(video.duration)}s)`;
+                };
+                video.onerror = () => {
+                    mediaError.textContent = 'Could not read video. Please choose a different file.';
+                    selectedFile = null;
+                    mediaInput.value = '';
+                };
+            } else if (selectedFile.type.startsWith('image/')) {
+                selectedMediaType = selectedFile.type;
+                mediaPreview.style.display = 'block';
+                mediaPreview.textContent = `Selected image: ${selectedFile.name}`;
+            } else {
+                mediaError.textContent = 'Unsupported file type. Choose an image or video.';
+                mediaInput.value = '';
+                selectedFile = null;
+            }
+        });
+
+        function submitPost() {
+            const content = document.getElementById('postContent').value.trim();
+            if (!content && !selectedFile) {
+                alert('Please add text or select an image/video to post.');
+                return;
+            }
+            document.getElementById('submitStatus').textContent = 'Saving post...';
+            if (selectedFile) {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    selectedDataUrl = reader.result;
+                    sendPost(content, selectedDataUrl, selectedMediaType);
+                };
+                reader.onerror = () => {
+                    document.getElementById('submitStatus').textContent = '';
+                    alert('Unable to read selected file. Please try again.');
+                };
+                reader.readAsDataURL(selectedFile);
+            } else {
+                sendPost(content, null, null);
+            }
+        }
+
+        function sendPost(content, mediaData, mediaType) {
+            fetch('/posts', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    username: currentUser,
+                    content,
+                    mediaData,
+                    mediaType
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    document.getElementById('submitStatus').textContent = '';
+                    alert(data.error);
+                    return;
+                }
+                document.getElementById('submitStatus').textContent = 'Post saved successfully.';
+                document.getElementById('postContent').value = '';
+                mediaInput.value = '';
+                mediaPreview.style.display = 'none';
+                selectedFile = null;
+                setTimeout(() => {
+                    window.location.href = '/dashboard';
+                }, 800);
+            })
+            .catch(error => {
+                document.getElementById('submitStatus').textContent = '';
+                alert('Server error: ' + error.message);
+            });
+        }
+    </script>
+</body>
+</html>
